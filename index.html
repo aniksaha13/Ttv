@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>T-TIVI | Live TV</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;}
+html,body{
+  margin:0; padding:0;
+  width:100%; height:100%;
+  font-family:'Inter', Arial, sans-serif;
+  background:#0b0b0b;
+  color:#fff;
+  display:flex;
+  flex-direction:column;
+  overflow-x:hidden;
+}
+
+.topbar {
+  flex-shrink:0;
+  position:sticky;
+  top:0;
+  z-index:1000;
+  background:#0b0b0b;
+  border-bottom:2px solid #222;
+  padding:12px;
+}
+
+.app-header {
+  text-align: center;
+  margin-bottom: 15px;
+}
+.app-header h1 {
+  font-size: 1.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.premium-tv-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+  animation: iconFloat 3s ease-in-out infinite;
+  position: relative;
+}
+@keyframes iconFloat {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-3px); }
+}
+.premium-tv-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.premium-tv-icon::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  right: -3px;
+  bottom: -3px;
+  background: linear-gradient(135deg, #ffb347, #ff8c33);
+  border-radius: 18px;
+  z-index: -1;
+  opacity: 0.6;
+  animation: iconGlow 2s infinite;
+}
+@keyframes iconGlow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+.title-text {
+  background: linear-gradient(135deg, #FFD966, #FFB347);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+#dynamicBadge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 20px;
+  border-radius: 60px;
+  width: fit-content;
+  margin: 0 auto 10px auto;
+  cursor: pointer;
+  background: linear-gradient(135deg, #75AADB, #4A90C4);
+  box-shadow: 0 0 15px rgba(74, 144, 196, 0.5);
+  animation: glowPulse 2s infinite;
+}
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 5px rgba(74, 144, 196, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(74, 144, 196, 0.8); }
+}
+.argentina-flag-icon { font-size: 24px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
+.argentina-text { font-size: 12px; font-weight: 700; color: #fff; text-shadow: 1px 1px 2px rgba(0,0,0,0.3); letter-spacing: 0.5px; }
+.argentina-text span { color: #FFD966; font-weight: 800; }
+
+.video-wrapper {
+  position: relative;
+  width: 100%;
+  max-height:50vh;
+  margin:auto;
+  background:#000;
+  border-radius:10px;
+  overflow:hidden;
+  display: none;
+}
+.video-wrapper.active {
+  display: block;
+}
+video {
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  cursor:pointer;
+}
+
+/* Show browser default controls */
+video::-webkit-media-controls {
+  display: flex !important;
+}
+video::-webkit-media-controls-panel {
+  display: flex !important;
+}
+video::-webkit-media-controls-enclosure {
+  display: flex !important;
+}
+video::-webkit-media-controls-play-button {
+  display: flex !important;
+}
+video::-webkit-media-controls-volume-slider {
+  display: flex !important;
+}
+video::-webkit-media-controls-timeline {
+  display: flex !important;
+}
+video::-webkit-media-controls-current-time-display {
+  display: flex !important;
+}
+video::-webkit-media-controls-time-remaining-display {
+  display: flex !important;
+}
+video::-webkit-media-controls-fullscreen-button {
+  display: flex !important;
+}
+
+/* Hide only the overlay play button */
+video::-webkit-media-controls-overlay-play-button {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+video[poster] {
+  poster: none !important;
+}
+
+.buffering-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #000000;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  pointer-events: none;
+}
+.buffering-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+.premium-spinner {
+  width: 60px;
+  height: 60px;
+  border: 4px solid rgba(255, 180, 71, 0.2);
+  border-top-color: #ffb347;
+  border-right-color: #ffb347;
+  border-radius: 50%;
+  animation: premiumSpin 0.8s linear infinite;
+  margin-bottom: 15px;
+}
+@keyframes premiumSpin {
+  to { transform: rotate(360deg); }
+}
+.loading-text {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, #FFD966, #FFB347);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: textPulse 1.5s ease-in-out infinite;
+}
+@keyframes textPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+.loading-dots {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.loading-dots span {
+  width: 6px;
+  height: 6px;
+  background: #ffb347;
+  border-radius: 50%;
+  animation: dotBounce 1.4s ease-in-out infinite;
+}
+.loading-dots span:nth-child(1) { animation-delay: 0s; }
+.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes dotBounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+.watermark {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  z-index: 55;
+  pointer-events: none;
+}
+.watermark img {
+  width: 35px;
+  height: auto;
+  border-radius: 4px;
+  opacity: 0.8;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+}
+
+#nowTitle {
+  margin-top:8px;
+  text-align:center;
+  font-weight:bold;
+  font-size:14px;
+  background:rgba(0,0,0,0.5);
+  padding:6px;
+  border-radius:20px;
+  display: none;
+}
+#nowTitle.active {
+  display: block;
+}
+
+.search-container {margin-top:8px; text-align:center;}
+#searchInput {
+  width:95%; max-width:400px;
+  padding:10px 15px;
+  border-radius:30px;
+  border:none;
+  outline:none;
+  font-size:14px;
+  background:rgba(15,20,30,0.7);
+  color:white;
+  border:1px solid rgba(255,215,0,0.3);
+}
+
+.playlist {flex:1; overflow-y:auto; padding:12px;}
+.grid {
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:12px;
+}
+.card {
+  background:#1a1a1a;
+  border-radius:10px;
+  cursor:pointer;
+  transition:.2s;
+  text-align:center;
+  font-weight:bold;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-start;
+  padding:8px;
+  border:1px solid rgba(255,200,100,0.2);
+}
+.card:hover {background:#2a2a2a; transform:scale(0.98);}
+.card img {width:100%; height:80px; object-fit:contain; margin-bottom:6px;}
+.card .title {font-size:13px; line-height:1.2; word-break:break-word;}
+@media(min-width:520px){
+  .grid {grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:12px;}
+  .card img {height:100px;}
+  .card .title {font-size:14px;}
+}
+
+.footer {
+  text-align: center;
+  padding: 12px;
+  margin-top: 10px;
+  border-top: 1px solid rgba(255,180,70,0.3);
+  background:#0b0b0b;
+}
+#dynamicFooter {
+  font-size: 12px;
+}
+.wave-text span {
+  display: inline-block;
+  animation: riverWave 1.6s infinite;
+  animation-delay: calc(0.06s * var(--i));
+  background: linear-gradient(135deg, #FFEFC0, #FFC46B);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+@keyframes riverWave {
+  0%,100%{ transform: translateY(0px); }
+  25%{ transform: translateY(-4px); }
+  50%{ transform: translateY(2px); }
+  75%{ transform: translateY(-2px); }
+}
+
+/* Chat Button */
+.help-chat-btn {
+  position: fixed;
+  bottom: 30px;
+  right: 20px;
+  width: 55px;
+  height: 55px;
+  background: linear-gradient(135deg, #ffb347, #ff8c33);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 9999;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.4), 0 0 0 2px rgba(255,215,0,0.5);
+}
+.help-chat-btn svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+}
+.notification-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #ff0000;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  display: none;
+}
+.notification-badge.show {
+  display: flex;
+}
+
+/* Chat Popup */
+.chat-popup {
+  position: fixed;
+  bottom: 100px;
+  right: 20px;
+  width: 350px;
+  max-width: calc(100vw - 40px);
+  height: 500px;
+  max-height: 70vh;
+  background: rgba(10,15,25,0.98);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  border: 1px solid rgba(255,215,0,0.4);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+  z-index: 9998;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+.chat-popup.active { display: flex; }
+.chat-header {
+  padding: 15px;
+  background: linear-gradient(135deg, #ffb347, #ff8c33);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.chat-header h3 { font-size: 16px; color: #000; font-weight: 700; }
+.chat-close { background: none; border: none; color: #000; font-size: 24px; cursor: pointer; }
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.message {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  word-wrap: break-word;
+}
+.message.user {
+  background: #ffb347;
+  color: #000;
+  align-self: flex-end;
+  border-bottom-right-radius: 5px;
+}
+.message.admin {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  align-self: flex-start;
+  border-bottom-left-radius: 5px;
+}
+.message-time {
+  font-size: 9px;
+  opacity: 0.6;
+  margin-top: 4px;
+  text-align: right;
+}
+.chat-input-area {
+  padding: 12px;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  gap: 10px;
+  border-top: 1px solid rgba(255,215,0,0.2);
+}
+.chat-input-area input {
+  flex: 1;
+  padding: 10px 15px;
+  border-radius: 30px;
+  border: none;
+  background: rgba(255,255,255,0.1);
+  color: white;
+  outline: none;
+}
+.chat-input-area button {
+  background: #ffb347;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 30px;
+  color: #000;
+  font-weight: bold;
+  cursor: pointer;
+}
+.chat-status {
+  padding: 8px;
+  text-align: center;
+  font-size: 11px;
+  background: rgba(0,0,0,0.5);
+  color: #ffaa66;
+}
+
+.auth-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.96);
+  backdrop-filter: blur(20px);
+  z-index: 2000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  visibility: hidden;
+  opacity: 0;
+  transition: visibility 0s, opacity 0.3s;
+}
+.auth-overlay.active {
+  visibility: visible;
+  opacity: 1;
+}
+.auth-card {
+  background: rgba(20,25,40,0.8);
+  backdrop-filter: blur(24px);
+  border-radius: 48px;
+  padding: 32px 24px;
+  width: 90%;
+  max-width: 400px;
+  text-align: center;
+  border: 1px solid rgba(255,215,0,0.4);
+}
+.auth-card h2 {
+  font-size: 2.2rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #FFD966, #FFB347);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  margin-bottom: 8px;
+}
+.name-input {
+  width: 100%;
+  padding: 14px 20px;
+  font-size: 1rem;
+  text-align: center;
+  background: rgba(0,0,0,0.6);
+  border: 2px solid rgba(255,215,0,0.5);
+  border-radius: 60px;
+  color: #FFE5A3;
+  outline: none;
+  margin-bottom: 15px;
+}
+.code-input {
+  width: 100%;
+  padding: 14px 20px;
+  font-size: 1rem;
+  text-align: center;
+  background: rgba(0,0,0,0.6);
+  border: 2px solid rgba(255,215,0,0.5);
+  border-radius: 60px;
+  color: #FFE5A3;
+  outline: none;
+  margin-bottom: 20px;
+}
+.submit-btn {
+  background: linear-gradient(95deg, #ffb347, #ff8c33);
+  border: none;
+  padding: 14px 28px;
+  border-radius: 60px;
+  font-weight: bold;
+  color: #000;
+  cursor: pointer;
+  width: 100%;
+}
+.submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.error-msg { color: #ff8866; margin-top: 12px; font-size: 0.8rem; }
+.success-msg { color: #88ff88; margin-top: 12px; font-size: 0.8rem; }
+
+.popup-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.95);
+  backdrop-filter: blur(15px);
+  z-index: 3000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.popup-modal.hide {
+  display: none;
+}
+.popup-content {
+  text-align: center;
+  max-width: 90%;
+  width: 400px;
+}
+.popup-image {
+  width: 100%;
+  max-width: 300px;
+  border-radius: 30px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.5), 0 0 0 3px rgba(255,215,0,0.3);
+  margin-bottom: 30px;
+}
+.popup-close-btn {
+  background: linear-gradient(135deg, #ffb347, #ff8c33);
+  border: none;
+  padding: 14px 35px;
+  border-radius: 50px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #000;
+  cursor: pointer;
+  transition: 0.3s;
+  box-shadow: 0 5px 15px rgba(255,140,51,0.3);
+}
+
+.update-notice {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  background: #ffb347;
+  color: #000;
+  padding: 8px 16px;
+  border-radius: 30px;
+  font-size: 11px;
+  font-weight: bold;
+  z-index: 1200;
+  display: none;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+.update-notice.show { display: block; animation: fadeInOut 2s ease; }
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateY(20px); }
+  20% { opacity: 1; transform: translateY(0); }
+  80% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(20px); }
+}
+
+@media (max-width: 550px) {
+  .help-chat-btn { bottom: 20px; right: 15px; width: 48px; height: 48px; }
+  .chat-popup { width: 320px; right: 10px; bottom: 90px; }
+  .watermark img { width: 28px; }
+  .premium-tv-icon { width: 40px; height: 40px; }
+  .app-header h1 { font-size: 1.4rem; gap: 8px; }
+  .premium-spinner { width: 45px; height: 45px; }
+  .loading-text { font-size: 12px; }
+}
+</style>
+</head>
+<body>
+
+<div id="popupModal" class="popup-modal">
+  <div class="popup-content">
+    <img id="popupImage" class="popup-image" src="https://flagcdn.com/w320/ar.png" alt="Argentina">
+    <br>
+    <button id="popupCloseBtn" class="popup-close-btn">🚀 প্রবেশ করুন</button>
+  </div>
+</div>
+
+<div id="authOverlay" class="auth-overlay">
+  <div class="auth-card">
+    <h2>🔐 T-TIVI CODE</h2>
+    <p>আপনার নাম ও এক্সেস আইডি সাবমিট করুন</p>
+    <input type="text" id="userNameInput" class="name-input" placeholder="আপনার নাম" maxlength="50" autocomplete="off">
+    <input type="text" id="accessCodeInput" class="code-input" placeholder="XXXXXX" maxlength="20" autocomplete="off">
+    <button id="submitCodeBtn" class="submit-btn">✅ অ্যাক্টিভেট করুন</button>
+    <div id="authError" class="error-msg"></div>
+    <div id="authSuccess" class="success-msg"></div>
+  </div>
+</div>
+
+<div id="mainApp" style="display:none;">
+  <div class="topbar">
+    <div class="app-header">
+      <h1>
+        <div class="premium-tv-icon">
+          <img id="tvIconImg" src="https://i.imgur.com/msgwN3A.jpeg" alt="TV Icon">
+        </div>
+        <span class="title-text">T-TIVI LIVE</span>
+      </h1>
+    </div>
+    
+    <div id="dynamicBadge">
+      <div id="badgeFlagIcon" class="argentina-flag-icon">🇦🇷</div>
+      <div id="badgeText" class="argentina-text">২০২৬ সালের বিশ্বকাপ এ আর্জেন্টিনা • <span>সাপোর্টাদের উপলক্ষে আমার সাইট এ স্বাগতম</span></div>
+    </div>
+    
+    <div id="videoWrapper" class="video-wrapper">
+      <video id="video" playsinline autoplay controls></video>
+      <div id="bufferingOverlay" class="buffering-overlay">
+        <div class="premium-spinner"></div>
+        <div class="loading-text">BUFFERING</div>
+        <div class="loading-dots"><span></span><span></span><span></span></div>
+      </div>
+      <div class="watermark">
+        <img id="watermarkImg" src="https://flagcdn.com/w80/ar.png" alt="Watermark">
+      </div>
+    </div>
+    
+    <div id="nowTitle">▶ কোনো চ্যানেল নির্বাচিত হয়নি</div>
+    <div class="search-container">
+      <input type="text" id="searchInput" placeholder="🔍 চ্যানেল সার্চ করুন..." />
+    </div>
+  </div>
+
+  <div class="playlist">
+    <div id="grid" class="grid"></div>
+  </div>
+
+  <div class="footer">
+    <div id="dynamicFooter" class="wave-text"></div>
+  </div>
+</div>
+
+<div id="updateNotice" class="update-notice">🔄 প্লেলিস্ট আপডেট হচ্ছে...</div>
+
+<div id="helpChatBtn" class="help-chat-btn">
+  <span id="chatNotificationBadge" class="notification-badge">0</span>
+  <svg viewBox="0 0 24 24" width="28" height="28">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" fill="none" stroke-width="1.8"/>
+    <circle cx="12" cy="11" r="1.5" fill="white" stroke="none"/>
+    <circle cx="17" cy="11" r="1.5" fill="white" stroke="none"/>
+    <circle cx="7" cy="11" r="1.5" fill="white" stroke="none"/>
+  </svg>
+</div>
+
+<div id="chatPopup" class="chat-popup">
+  <div class="chat-header">
+    <h3>💬 হেল্পলাইন সেন্টার <span id="adminOnlineStatus" style="font-size: 11px;"></span></h3>
+    <button class="chat-close" id="chatCloseBtn">✕</button>
+  </div>
+  <div id="chatMessages" class="chat-messages">
+    <div class="message admin">👋 স্বাগতম! আর্জেন্টিনা সাপোর্টারদের জন্য শুভ কামনা।</div>
+  </div>
+  <div id="chatStatus" class="chat-status">🔴 সংযুক্ত হচ্ছে...</div>
+  <div class="chat-input-area">
+    <input type="text" id="chatInput" placeholder="আপনার মেসেজ লিখুন...">
+    <button id="chatSendBtn">প্রেরণ</button>
+  </div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBBCJ5RwaoXUH3wPh5YX9WJdXpmKtrHoFg",
+  authDomain: "app3-1b79b.firebaseapp.com",
+  databaseURL: "https://app3-1b79b-default-rtdb.firebaseio.com",
+  projectId: "app3-1b79b",
+  storageBucket: "app3-1b79b.firebasestorage.app",
+  messagingSenderId: "671925051053",
+  appId: "1:671925051053:web:0829789e495812dae0f024"
+};
+
+let database = null;
+let firebaseReady = false;
+let allChannels = [];
+let currentDeviceId = null;
+let chatRoomRef = null;
+let currentActivatedCode = null;
+let activeCodeRef = null;
+let unreadCount = 0;
+let currentUserName = "";
+let defaultM3u8Url = "https://raw.githubusercontent.com/aniksaha13/Parsonal-project-home/refs/heads/main/Homeanik.m3u8";
+
+// Initialize Firebase
+try {
+  firebase.initializeApp(firebaseConfig);
+  database = firebase.database();
+  firebaseReady = true;
+  
+  database.ref('settings/playlistUrl').on('value', (snap) => {
+    if(snap.val()) defaultM3u8Url = snap.val();
+  });
+  
+  database.ref('settings/popupImageUrl').on('value', (snap) => {
+    if(snap.val()) document.getElementById('popupImage').src = snap.val();
+  });
+  database.ref('settings/tvIcon').on('value', (snap) => {
+    if(snap.val()) document.getElementById('tvIconImg').src = snap.val();
+  });
+  database.ref('settings/watermarkUrl').on('value', (snap) => {
+    if(snap.val()) document.getElementById('watermarkImg').src = snap.val();
+  });
+  database.ref('settings/badgeSettings').on('value', (snap) => {
+    const settings = snap.val();
+    if(settings) {
+      if(settings.flagIcon) document.getElementById('badgeFlagIcon').innerHTML = settings.flagIcon;
+      if(settings.text) document.getElementById('badgeText').innerHTML = settings.text;
+      if(settings.bgColor) document.getElementById('dynamicBadge').style.background = settings.bgColor;
+    }
+  });
+  database.ref('settings/footerText').on('value', (snap) => {
+    if(snap.val()) {
+      const footer = document.getElementById('dynamicFooter');
+      footer.innerHTML = '';
+      const txt = snap.val();
+      for(let i = 0; i < txt.length; i++) {
+        let s = document.createElement('span');
+        s.textContent = txt[i];
+        s.style.setProperty('--i', i);
+        if(txt[i] === ' ') s.style.width = '8px';
+        footer.appendChild(s);
+      }
+    } else {
+      const footer = document.getElementById('dynamicFooter');
+      footer.innerHTML = '';
+      const txt = "power by àñik árpón";
+      for(let i = 0; i < txt.length; i++) {
+        let s = document.createElement('span');
+        s.textContent = txt[i];
+        s.style.setProperty('--i', i);
+        if(txt[i] === ' ') s.style.width = '8px';
+        footer.appendChild(s);
+      }
+    }
+  });
+  database.ref('admin/online').on('value', (snap) => {
+    const statusSpan = document.getElementById('adminOnlineStatus');
+    if(snap.val()) {
+      statusSpan.innerHTML = '🟢 অনলাইন';
+      statusSpan.style.color = '#88ff88';
+    } else {
+      statusSpan.innerHTML = '🔴 অফলাইন';
+      statusSpan.style.color = '#ff8888';
+    }
+  });
+} catch(e) { console.error("Firebase init error:", e); }
+
+let hls = null;
+const video = document.getElementById('video');
+const videoWrapper = document.getElementById('videoWrapper');
+const bufferingOverlay = document.getElementById('bufferingOverlay');
+const nowTitle = document.getElementById('nowTitle');
+let currentChannel = null;
+let lastTouchEnd = 0;
+let bufferingTimeout = null;
+
+// Set initial volume
+video.volume = 1;
+
+function showBuffering() {
+  if (bufferingTimeout) clearTimeout(bufferingTimeout);
+  bufferingOverlay.classList.add('active');
+}
+function hideBuffering() {
+  if (bufferingTimeout) clearTimeout(bufferingTimeout);
+  bufferingTimeout = setTimeout(() => bufferingOverlay.classList.remove('active'), 300);
+}
+
+function playChannel(channel) {
+  currentChannel = channel;
+  nowTitle.textContent = '▶ ' + channel.title;
+  nowTitle.classList.add('active');
+  videoWrapper.classList.add('active');
+  showBuffering();
+  if(hls){ try{ hls.destroy(); }catch(e){} hls=null; }
+  if(!channel.url){ alert('URL পাওয়া যায়নি'); hideBuffering(); return; }
+  if(video.canPlayType('application/vnd.apple.mpegurl')){
+    video.src = channel.url;
+    video.play().catch(e => console.log("Play error:", e));
+  }else if(Hls.isSupported()){
+    hls = new Hls({ maxMaxBufferLength: 30, enableWorker: true, lowLatencyMode: true });
+    hls.loadSource(channel.url);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => { 
+      video.play().catch(e=>{}); 
+      hideBuffering();
+      video.volume = 1;
+    });
+    hls.on(Hls.Events.BUFFERING, (e,d) => { if(d.bufferTime < 0.5) showBuffering(); });
+    hls.on(Hls.Events.FRAG_BUFFERED, () => hideBuffering());
+  }else{
+    video.src = channel.url;
+    video.play().catch(e=>{});
+  }
+}
+
+video.addEventListener('waiting', showBuffering);
+video.addEventListener('playing', hideBuffering);
+video.addEventListener('stalled', showBuffering);
+video.addEventListener('canplay', hideBuffering);
+video.addEventListener('canplaythrough', hideBuffering);
+
+function hidePlayButton() {
+  video.removeAttribute('poster');
+  video.poster = '';
+}
+setInterval(hidePlayButton, 500);
+
+function toggleFullscreen() {
+  try {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      if(videoWrapper.requestFullscreen) videoWrapper.requestFullscreen();
+      else if(videoWrapper.webkitRequestFullscreen) videoWrapper.webkitRequestFullscreen();
+      if(screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(()=>{});
+    } else {
+      if(document.exitFullscreen) document.exitFullscreen();
+      else if(document.webkitExitFullscreen) document.webkitExitFullscreen();
+      if(screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+    }
+  } catch(e){}
+}
+
+video.addEventListener('click', (e) => { 
+  e.stopPropagation(); 
+  toggleFullscreen(); 
+});
+video.addEventListener('dblclick', (e) => { 
+  e.preventDefault(); 
+  toggleFullscreen(); 
+});
+video.addEventListener('touchend', (e) => {
+  const now = new Date().getTime();
+  if (lastTouchEnd && (now - lastTouchEnd) < 300) { 
+    e.preventDefault(); 
+    toggleFullscreen(); 
+  }
+  lastTouchEnd = now;
+});
+
+async function loadPlaylist(url){
+  try{
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(l=>l!=='');
+    const items=[];
+    for(let i=0;i<lines.length;i++){
+      if(lines[i].startsWith('#EXTINF')){
+        const titleMatch = lines[i].match(/,(.*)$/);
+        const title = (titleMatch ? titleMatch[1].trim() : 'Channel');
+        const logoMatch = lines[i].match(/tvg-logo="([^"]+)"/i);
+        const logo = logoMatch ? logoMatch[1] : '';
+        let j=i+1;
+        while(j<lines.length && lines[j].startsWith('#')) j++;
+        const url = lines[j] || '';
+        items.push({title,url,logo});
+        i=j;
+      }
+    }
+    allChannels = items;
+    render(items);
+  }catch(err){
+    document.getElementById('grid').innerHTML='<div style="color:#bbb;padding:12px">প্লেলিস্ট লোড করতে ব্যর্থ</div>';
+  }
+}
+
+function render(items){
+  const grid = document.getElementById('grid');
+  grid.innerHTML='';
+  if(items.length===0){ grid.innerHTML='<div style="color:#bbb;padding:8px">কোনো চ্যানেল পাওয়া যায়নি</div>'; return; }
+  items.forEach(it=>{
+    const c = document.createElement('div');
+    c.className='card';
+    const imgHtml = it.logo ? `<img src="${it.logo}" alt="${it.title}" onerror="this.src='https://placehold.co/100x80/2a2a2a/ffb347?text=TV'">` : '';
+    c.innerHTML = imgHtml + `<div class="title">${escapeHtml(it.title)}</div>`;
+    c.onclick = ()=> playChannel(it);
+    grid.appendChild(c);
+  });
+}
+function escapeHtml(str) { return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m])); }
+
+document.getElementById('searchInput').addEventListener('input', e=>{
+  const query = e.target.value.toLowerCase();
+  render(allChannels.filter(c=>c.title.toLowerCase().includes(query)));
+});
+
+function getDeviceId() {
+  let id = localStorage.getItem('ttivi_device_id');
+  if(!id) { 
+    id = 'dev_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9); 
+    localStorage.setItem('ttivi_device_id', id); 
+  }
+  return id;
+}
+currentDeviceId = getDeviceId();
+
+function showUpdateNotice(msg) {
+  const updateNotice = document.getElementById('updateNotice');
+  updateNotice.textContent = msg;
+  updateNotice.classList.add('show');
+  setTimeout(() => updateNotice.classList.remove('show'), 2000);
+}
+
+function clearUserDataAndLogout(reason) {
+  localStorage.removeItem('ttivi_activated_code');
+  localStorage.removeItem('ttivi_user_name');
+  currentActivatedCode = null;
+  currentUserName = "";
+  document.getElementById('mainApp').style.display = 'none';
+  document.getElementById('authOverlay').classList.add('active');
+  document.getElementById('authError').innerText = reason || "আপনার অ্যাকাউন্ট ডিলিট করা হয়েছে। নতুন আইডি দিয়ে লগইন করুন।";
+  document.getElementById('accessCodeInput').value = '';
+  document.getElementById('userNameInput').value = '';
+  document.getElementById('authSuccess').innerText = '';
+  document.getElementById('submitCodeBtn').disabled = false;
+  if(database) database.ref('users/' + currentDeviceId).update({ online: false, lastSeen: Date.now() });
+}
+
+async function checkIfUserDeleted() {
+  if(!firebaseReady || !database) return false;
+  try {
+    const userSnap = await database.ref('users/' + currentDeviceId).once('value');
+    const userData = userSnap.val();
+    if(userData && userData.deleted === true) {
+      clearUserDataAndLogout("⚠️ আপনার অ্যাকাউন্ট এডমিন দ্বারা ডিলিট করা হয়েছে! নতুন আইডি দিয়ে লগইন করুন।");
+      return true;
+    }
+    return false;
+  } catch(e) {
+    console.error("Error checking user status:", e);
+    return false;
+  }
+}
+
+async function verifyCode(code, userName) {
+  if(!firebaseReady) {
+    if(code === "TIVI2025" || code === "ADMIN999") return { valid: true, m3u8: defaultM3u8Url };
+    return { valid: false, message: "ভুল কোড!" };
+  }
+  try {
+    const userCheck = await database.ref('users/' + currentDeviceId).once('value');
+    if(userCheck.val() && userCheck.val().deleted === true) {
+      localStorage.removeItem('ttivi_device_id');
+      currentDeviceId = getDeviceId();
+    }
+    
+    const snap = await database.ref('activeCodes/' + code).once('value');
+    const data = snap.val();
+    if(!data) return { valid: false, message: "ভুল কোড!" };
+    if(data.active !== true) return { valid: false, message: "কোড নিষ্ক্রিয়!" };
+    if(data.used === true && data.usedBy !== currentDeviceId) {
+      return { valid: false, message: "এই কোড অন্য ডিভাইসে ব্যবহার করা হয়েছে!" };
+    }
+    if(!data.used) {
+      await database.ref('activeCodes/' + code).update({ 
+        used: true, 
+        usedBy: currentDeviceId, 
+        usedAt: Date.now(), 
+        userName: userName 
+      });
+    }
+    const m3u8Link = data.m3u8Url || defaultM3u8Url;
+    await database.ref('users/' + currentDeviceId).set({ 
+      deviceId: currentDeviceId, 
+      activatedCode: code, 
+      userName: userName,
+      playlistUrl: m3u8Link, 
+      lastSeen: Date.now(),
+      online: true,
+      lastActive: Date.now(),
+      deleted: false,
+      blocked: false
+    });
+    return { valid: true, m3u8: m3u8Link, code: code };
+  } catch(e) { 
+    console.error(e); 
+    return { valid: false, message: "ত্রুটি! আবার চেষ্টা করুন" }; 
+  }
+}
+
+async function onAuthSuccess(m3u8Url, usedCode, userName) {
+  currentActivatedCode = usedCode;
+  currentUserName = userName;
+  localStorage.setItem('ttivi_activated_code', usedCode);
+  localStorage.setItem('ttivi_user_name', userName);
+  
+  document.getElementById('authOverlay').classList.remove('active');
+  document.getElementById('mainApp').style.display = 'flex';
+  document.getElementById('mainApp').style.flexDirection = 'column';
+  document.getElementById('mainApp').style.height = '100%';
+  
+  await loadPlaylist(m3u8Url);
+  initChat();
+  if(database) database.ref('users/' + currentDeviceId).update({ online: true, lastActive: Date.now() });
+  
+  if(activeCodeRef) activeCodeRef.off();
+  activeCodeRef = database.ref('activeCodes/' + usedCode);
+  activeCodeRef.on('value', (snap) => {
+    const data = snap.val();
+    if(!data || data.active !== true) {
+      clearUserDataAndLogout("⚠️ আপনার এক্সেস আইডি নিষ্ক্রিয় করা হয়েছে!");
+    }
+  });
+}
+
+function initChat() {
+  if(!firebaseReady || !database) { 
+    document.getElementById('chatStatus').innerText = '⚫ অফলাইন'; 
+    return; 
+  }
+  const userChatRef = database.ref('chats/' + currentDeviceId);
+  chatRoomRef = userChatRef;
+  
+  // Clear previous messages
+  const messagesDiv = document.getElementById('chatMessages');
+  messagesDiv.innerHTML = '<div class="message admin">👋 স্বাগতম! আর্জেন্টিনা সাপোর্টারদের জন্য শুভ কামনা।</div>';
+  
+  // Load existing messages
+  userChatRef.child('messages').off();
+  userChatRef.child('messages').once('value', (snapshot) => {
+    const messages = [];
+    snapshot.forEach(child => {
+      messages.push({ key: child.key, ...child.val() });
+    });
+    messages.sort((a,b) => a.timestamp - b.timestamp);
+    messages.forEach(msg => {
+      if(msg && !msg.deleted) {
+        const div = document.createElement('div');
+        div.className = `message ${msg.sender === 'admin' ? 'admin' : 'user'}`;
+        const senderName = msg.sender === 'admin' ? 'Admin' : (msg.userName || 'ইউজার');
+        div.innerHTML = `<strong>${senderName}</strong><br>${msg.text}<div class="message-time">${new Date(msg.timestamp).toLocaleTimeString()}</div>`;
+        messagesDiv.appendChild(div);
+      }
+    });
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  });
+  
+  // Listen for new messages
+  userChatRef.child('messages').on('child_added', (snap) => {
+    const msg = snap.val();
+    if(msg && !msg.deleted) {
+      const isChatOpen = document.getElementById('chatPopup').classList.contains('active');
+      if (!isChatOpen && msg.sender === 'admin') { 
+        unreadCount++; 
+        updateNotificationBadge(); 
+      }
+      const div = document.createElement('div');
+      div.className = `message ${msg.sender === 'admin' ? 'admin' : 'user'}`;
+      const senderName = msg.sender === 'admin' ? 'Admin' : (msg.userName || 'ইউজার');
+      div.innerHTML = `<strong>${senderName}</strong><br>${msg.text}<div class="message-time">${new Date(msg.timestamp).toLocaleTimeString()}</div>`;
+      messagesDiv.appendChild(div);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+  });
+  
+  userChatRef.update({ userId: currentDeviceId, userName: currentUserName, lastActive: Date.now() });
+  document.getElementById('chatStatus').innerText = '🟢 অনলাইন';
+}
+
+function updateNotificationBadge() {
+  const badge = document.getElementById('chatNotificationBadge');
+  if (unreadCount > 0) { 
+    badge.textContent = unreadCount > 9 ? '9+' : unreadCount; 
+    badge.classList.add('show'); 
+  } else { 
+    badge.classList.remove('show'); 
+  }
+}
+
+async function sendMsg() {
+  if(!chatRoomRef) return;
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if(!text) return;
+  await chatRoomRef.child('messages').push({ 
+    text: text, 
+    sender: 'user', 
+    userName: currentUserName,
+    timestamp: Date.now(), 
+    deleted: false 
+  });
+  input.value = '';
+}
+
+document.getElementById('helpChatBtn').onclick = () => {
+  const popup = document.getElementById('chatPopup');
+  popup.classList.toggle('active');
+  if (popup.classList.contains('active')) { 
+    unreadCount = 0; 
+    updateNotificationBadge(); 
+  }
+};
+document.getElementById('chatCloseBtn').onclick = () => document.getElementById('chatPopup').classList.remove('active');
+document.getElementById('chatSendBtn').onclick = sendMsg;
+document.getElementById('chatInput').addEventListener('keypress', (e) => { if(e.key === 'Enter') sendMsg(); });
+
+document.getElementById('submitCodeBtn').onclick = async () => {
+  const userName = document.getElementById('userNameInput').value.trim();
+  const code = document.getElementById('accessCodeInput').value.trim().toUpperCase();
+  if(!userName) { document.getElementById('authError').innerText = 'আপনার নাম লিখুন'; return; }
+  if(!code) { document.getElementById('authError').innerText = 'আইডি লিখুন'; return; }
+  document.getElementById('authError').innerText = '';
+  document.getElementById('authSuccess').innerText = '⏳ যাচাই...';
+  document.getElementById('submitCodeBtn').disabled = true;
+  const result = await verifyCode(code, userName);
+  if(result.valid) {
+    document.getElementById('authSuccess').innerText = '✅ সফল!';
+    setTimeout(() => { 
+      onAuthSuccess(result.m3u8, result.code, userName); 
+      document.getElementById('popupModal').classList.add('hide'); 
+    }, 500);
+  } else {
+    document.getElementById('authError').innerText = '❌ ' + result.message;
+    document.getElementById('authSuccess').innerText = '';
+    document.getElementById('submitCodeBtn').disabled = false;
+  }
+};
+
+document.getElementById('popupCloseBtn').onclick = async () => {
+  const savedCode = localStorage.getItem('ttivi_activated_code');
+  const savedName = localStorage.getItem('ttivi_user_name');
+  if(savedCode && savedName && firebaseReady) {
+    try {
+      const userCheck = await database.ref('users/' + currentDeviceId).once('value');
+      if(userCheck.val() && userCheck.val().deleted === true) {
+        localStorage.removeItem('ttivi_activated_code');
+        localStorage.removeItem('ttivi_user_name');
+        document.getElementById('popupModal').classList.remove('hide');
+        document.getElementById('authOverlay').classList.add('active');
+        return;
+      }
+      const snap = await database.ref('activeCodes/' + savedCode).once('value');
+      const data = snap.val();
+      if(data && data.active === true) {
+        const savedM3u8 = data.m3u8Url || defaultM3u8Url;
+        await onAuthSuccess(savedM3u8, savedCode, savedName);
+        document.getElementById('popupModal').classList.add('hide');
+        return;
+      }
+    } catch(e) {}
+  }
+  document.getElementById('popupModal').classList.add('hide');
+  document.getElementById('authOverlay').classList.add('active');
+};
+
+setInterval(() => {
+  if(database && currentDeviceId && document.getElementById('mainApp').style.display !== 'none' && currentActivatedCode) {
+    database.ref('users/' + currentDeviceId).update({ online: true, lastActive: Date.now() });
+  }
+}, 30000);
+
+window.addEventListener('beforeunload', () => {
+  if(database && currentDeviceId && currentActivatedCode) {
+    database.ref('users/' + currentDeviceId).update({ online: false, lastSeen: Date.now() });
+  }
+});
+
+window.onload = () => {
+  const savedCode = localStorage.getItem('ttivi_activated_code');
+  const savedName = localStorage.getItem('ttivi_user_name');
+  if(savedCode && savedName && firebaseReady) {
+    database.ref('users/' + currentDeviceId).once('value').then(async (userSnap) => {
+      if(userSnap.val() && userSnap.val().deleted === true) {
+        localStorage.removeItem('ttivi_activated_code');
+        localStorage.removeItem('ttivi_user_name');
+        document.getElementById('popupModal').classList.remove('hide');
+        document.getElementById('authOverlay').classList.add('active');
+        return;
+      }
+      database.ref('activeCodes/' + savedCode).once('value').then(async (snap) => {
+        const data = snap.val();
+        if(data && data.active === true) {
+          const savedM3u8 = data.m3u8Url || defaultM3u8Url;
+          await onAuthSuccess(savedM3u8, savedCode, savedName);
+          document.getElementById('popupModal').classList.add('hide');
+        } else { 
+          document.getElementById('popupModal').classList.remove('hide'); 
+        }
+      }).catch(() => document.getElementById('popupModal').classList.remove('hide'));
+    }).catch(() => document.getElementById('popupModal').classList.remove('hide'));
+  } else { 
+    document.getElementById('popupModal').classList.remove('hide'); 
+  }
+  hidePlayButton();
+  video.volume = 1;
+};
+</script>
+</body>
+</html>
